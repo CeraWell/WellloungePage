@@ -16,8 +16,9 @@ header{background:var(--navy);color:#fff;padding:18px 28px;display:flex;align-it
 header h1{font-size:20px;font-weight:700}
 header .sub{color:#aab6d3;font-size:13px}
 .sample-banner{background:#fff7e0;border-bottom:1px solid #f0dfae;color:#8a6a00;padding:8px 28px;font-size:13px}
-.tabs{display:flex;gap:4px;background:var(--navy);padding:0 24px}
-.tab{padding:11px 22px;color:#aab6d3;cursor:pointer;font-size:14.5px;font-weight:600;border-radius:8px 8px 0 0}
+.tabs{display:flex;gap:4px;background:var(--navy);padding:0 24px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:11px 22px;color:#aab6d3;cursor:pointer;font-size:14.5px;font-weight:600;border-radius:8px 8px 0 0;white-space:nowrap;flex:0 0 auto}
 .tab.active{background:var(--bg);color:var(--navy)}
 .wrap{padding:22px 28px;max-width:1500px;margin:0 auto}
 .filters{display:flex;gap:10px;align-items:center;margin-bottom:18px;flex-wrap:wrap}
@@ -43,8 +44,8 @@ tr.grand td{background:var(--navy);color:#fff;font-weight:700;border-color:var(-
 .rate.warn{background:var(--warn-bg);color:var(--warn)}
 .rate.bad{background:var(--bad-bg);color:var(--bad)}
 .rate.na{background:#eef0f4;color:#98a0b3}
-.chart{display:flex;align-items:flex-end;gap:18px;height:205px;padding:10px 6px 0}
-.cgrp{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end}
+.chart{display:flex;align-items:flex-end;gap:18px;height:205px;padding:10px 6px 0;overflow-x:auto;overflow-y:hidden}
+.cgrp{flex:1 0 52px;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end}
 .bars{display:flex;align-items:flex-end;gap:5px;height:140px}
 .bar{width:26px;border-radius:4px 4px 0 0;position:relative}
 .bar.tg{background:#c3cde0}
@@ -68,6 +69,21 @@ tr.grand td{background:var(--navy);color:#fff;font-weight:700;border-color:var(-
 .stchip.off{background:#f4f5f8;color:#a3aabb;text-decoration:line-through}
 .pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11.5px;font-weight:600;background:#eef1f7;color:#3d4763;margin-left:6px}
 footer{padding:14px 28px 30px;color:#9aa3b8;font-size:12px;text-align:center}
+@media (max-width:640px){
+  header{padding:12px 14px} header h1{font-size:16px}
+  .sample-banner{padding:7px 14px;font-size:12px}
+  .wrap{padding:12px 10px}
+  .tabs{padding:0 8px}
+  .tab{padding:10px 13px;font-size:13px}
+  .kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .kpi{padding:12px 14px} .kpi .v{font-size:19px}
+  .card{padding:13px 12px}
+  .filters select{max-width:44vw}
+  .filters input#fStore{width:56vw!important}
+  #dStore{width:100%!important;box-sizing:border-box}
+  .bar{width:20px}
+  table{font-size:12px} th,td{padding:6px 5px}
+}
 </style>
 </head>
 <body>
@@ -556,7 +572,7 @@ function renderDaily(rows){
   }
   const sum=k=>stores.reduce((s,o)=>s+(o[k]||0),0);
   const kActT=sum('actT'),kExpT=sum('expT'),kSum=sum('sum'),kTot=sum('tot');
-  stores.sort((a,b)=>(b.actT||0)-(a.actT||0)||(b.sum||0)-(a.sum||0));
+  stores.sort((a,b)=>(b.sum||0)-(a.sum||0)||(b.actT||0)-(a.actT||0)||(b.tot||0)-(a.tot||0));
   const sRows=stores.map((o,i)=>{
     const pill=o.type&&o.type!=='대행점'?` <span class="pill">${o.type}</span>`:'';
     return `<tr><td><b>${i+1}</b></td><td class="l">${o.store}${pill}</td><td>${o.mgr}</td><td>${o.team}</td>
@@ -564,6 +580,7 @@ function renderDaily(rows){
       <td><b>${o.actT==null?'-':fmt(o.actT)}</b></td><td>${o.tgt==null?'-':fmt(o.tgt)}</td>
       <td>${o.sum==null?'-':fmt(o.sum)}</td><td>${o.tot==null?'-':fmt(o.tot)}</td><td>${o.prog||'-'}</td></tr>`;
   }).join('');
+  mgrs.sort((a,b)=>(b.sum||0)-(a.sum||0)||(b.actT||0)-(a.actT||0));
   const mRows=mgrs.map((o,i)=>`<tr><td>${i+1}</td><td class="l"><b>${o.mgr}</b></td><td>${o.team}</td><td>${o.cnt}</td>
       <td>${o.expT==null?'-':fmt(o.expT)}</td><td><b>${o.actT==null?'-':fmt(o.actT)}</b></td>
       <td>${o.sum==null?'-':fmt(o.sum)}</td><td>${o.tot==null?'-':fmt(o.tot)}</td><td>${o.prog||'-'}</td></tr>`).join('');
@@ -581,12 +598,12 @@ function renderDaily(rows){
     <div class="kpi"><div class="t">당월 총합계</div><div class="v">${fmt(kTot)}</div><div class="d">메디스파 등 포함</div></div>
     <div class="kpi"><div class="t">보고 매장</div><div class="v">${fmt(stores.length)}</div><div class="d">개 매장</div></div>
   </div>
-  <div class="card"><h2>지역장별 당일 현황</h2><div class="desc">시트 정렬 순 (진척율 기준)</div>
+  <div class="card"><h2>지역장별 당일 현황</h2><div class="desc">당월 누계 실적 순 정렬</div>
     <div class="scroll"><table>
       <thead><tr><th>NO</th><th>지역장</th><th>팀</th><th>매장수</th><th>체험 당일</th><th>실적 당일</th><th>월누계</th><th>총합계</th><th>진척율</th></tr></thead>
       <tbody>${mRows}</tbody></table></div>
   </div>
-  <div class="card"><h2>매장별 당일 실적</h2><div class="desc">당일 실적 순 정렬 · ${stores.length}개 매장</div>
+  <div class="card"><h2>매장별 당일 실적</h2><div class="desc">당월 누계 실적 순 정렬 (동률 시 당일 실적순) · ${stores.length}개 매장</div>
     <div class="scroll" style="max-height:560px;overflow-y:auto"><table>
       <thead><tr><th>순위</th><th style="min-width:150px">매장</th><th>지역장</th><th>팀</th><th>체험 당일</th><th>체험 월평균</th><th>실적 당일</th><th>월목표</th><th>월누계</th><th>총합계</th><th>진척율</th></tr></thead>
       <tbody>${sRows}</tbody></table></div>
