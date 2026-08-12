@@ -89,7 +89,7 @@ footer{padding:14px 28px 30px;color:#9aa3b8;font-size:12px;text-align:center}
 <body>
 <header>
   <h1>2026 매장별 실적 관리 리포트</h1>
-  <span class="sub">기준: 2026년 1~7월 · 웰라운지 · <b id="buildVer">빌드 08/10 14:27</b></span>
+  <span class="sub">기준: 2026년 1~7월 · 웰라운지 · <b id="buildVer">빌드 08/12 10:28</b></span>
 </header>
 <div class="sample-banner" style="background:#e8f2ff;border-color:#c9def7;color:#1d4e8f">ℹ 매출·외부코치 실적: 26년 월별 실적 파일 · 코치현황: 매장별 코치현황 대시보드 기준. 셀루닉 매장은 4~6월 데이터만 존재합니다.</div>
 <div class="tabs">
@@ -274,37 +274,80 @@ function bindYear(){
 }
 
 /* ---------- 지역장별 탭 ---------- */
-let mgrChecked=new Set(), storeOff=new Set();
+let mgrChecked=new Set(), storeOff=new Set(), mgrYear='2026';
+function pastRec(y,st){
+  const arr=(D.PAST||{})[y]||[];
+  const PAL={'서울은평뉴타운점':'서울은평점','화성동탄호수공원점':'동탄호수공원점'};
+  return arr.find(x=>x.store===st)||(PAL[st]?arr.find(x=>x.store===PAL[st]):null)||null;
+}
 function renderMgr(){
   const stores=visibleStores();
   const aggsAll=mgrAgg(stores);
   [...mgrChecked].forEach(m=>{ if(!aggsAll.some(o=>o.mgr===m)) mgrChecked.delete(m); });
   const chips=aggsAll.map(o=>`<label class="chip${mgrChecked.has(o.mgr)?' on':''}"><input type="checkbox" data-mgr="${o.mgr}"${mgrChecked.has(o.mgr)?' checked':''}>${o.mgr} <span class="cell-sub">(${o.stores})</span></label>`).join('');
-  const head=`<tr><th>팀</th><th>지역장</th><th>매장수</th><th>목표</th><th>실적</th><th>달성률</th><th>외부코치 계약</th><th>내부코치</th><th>외부코치<br>(별도관리)</th><th>적정코치수<br>충족</th></tr>`;
+  const yearSel=`<label style="font-size:13px;color:var(--sub);font-weight:600">연도</label>
+    <select id="mgrYear" style="padding:7px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:13.5px;font-family:inherit">
+      <option value="2024"${mgrYear==='2024'?' selected':''}>2024년</option>
+      <option value="2025"${mgrYear==='2025'?' selected':''}>2025년</option>
+      <option value="2026"${mgrYear==='2026'?' selected':''}>2026년</option>
+    </select>`;
   let sections='';
   aggsAll.filter(o=>mgrChecked.has(o.mgr)).forEach(o=>{
     const mgrStores=stores.filter(st=>mgrOf(st)===o.mgr);
     const active=mgrStores.filter(st=>!storeOff.has(st));
-    const a=mgrAgg(active).find(x=>x.mgr===o.mgr);
-    const r=a&&a.tgt?a.actT/a.tgt*100:null;
-    const sumRow=a?`<tr><td>${a.team}</td><td class="l"><b>${a.mgr}</b></td><td>${a.stores}</td>
-      <td>${fmt(a.tgt)}</td><td><b>${fmt(a.act)}</b></td><td>${rateHtml(r)}</td>
-      <td>${fmt(a.ext)}</td><td>${fmt(a.cint)}</td><td>${fmt(a.cext)}</td>
-      <td>${a.ctgtCnt?(a.cmetCnt>=a.ctgtCnt?`<span class="ok">전체 충족</span>`:`<span class="no">미달 ${a.ctgtCnt-a.cmetCnt}개점</span>`)+` <span class="cell-sub">(${a.cmetCnt}/${a.ctgtCnt})</span>`:'-'}</td></tr>`
-      :`<tr><td colspan="10" style="color:var(--sub)">표시할 매장이 없습니다 (모두 해제됨)</td></tr>`;
     const stchips=mgrStores.map(st=>`<label class="stchip${storeOff.has(st)?' off':''}"><input type="checkbox" data-st="${st}"${storeOff.has(st)?'':' checked'}>${st}</label>`).join(' ');
-    sections+=`<div class="card" style="border-left:4px solid var(--blue)">
-      <h2>${o.mgr} 지역장</h2>
-      <div class="desc">매장 체크를 해제하면 아래 집계·표에서 제외됩니다</div>
-      <div class="chipbox" style="margin-bottom:12px">${stchips}</div>
-      <div class="scroll"><table><thead>${head}</thead><tbody>${sumRow}</tbody></table></div>
-    </div>`+(active.length?salesCards(active):'');
+    if(mgrYear==='2026'){
+      const a=mgrAgg(active).find(x=>x.mgr===o.mgr);
+      const r=a&&a.tgt?a.actT/a.tgt*100:null;
+      const head=`<tr><th>팀</th><th>지역장</th><th>매장수</th><th>목표</th><th>실적</th><th>달성률</th><th>외부코치 계약</th><th>내부코치</th><th>외부코치<br>(별도관리)</th><th>적정코치수<br>충족</th></tr>`;
+      const sumRow=a?`<tr><td>${a.team}</td><td class="l"><b>${a.mgr}</b></td><td>${a.stores}</td>
+        <td>${fmt(a.tgt)}</td><td><b>${fmt(a.act)}</b></td><td>${rateHtml(r)}</td>
+        <td>${fmt(a.ext)}</td><td>${fmt(a.cint)}</td><td>${fmt(a.cext)}</td>
+        <td>${a.ctgtCnt?(a.cmetCnt>=a.ctgtCnt?`<span class="ok">전체 충족</span>`:`<span class="no">미달 ${a.ctgtCnt-a.cmetCnt}개점</span>`)+` <span class="cell-sub">(${a.cmetCnt}/${a.ctgtCnt})</span>`:'-'}</td></tr>`
+        :`<tr><td colspan="10" style="color:var(--sub)">표시할 매장이 없습니다 (모두 해제됨)</td></tr>`;
+      sections+=`<div class="card" style="border-left:4px solid var(--blue)">
+        <h2>${o.mgr} 지역장</h2>
+        <div class="desc">매장 체크를 해제하면 아래 집계·표에서 제외됩니다</div>
+        <div class="chipbox" style="margin-bottom:12px">${stchips}</div>
+        <div class="scroll"><table><thead>${head}</thead><tbody>${sumRow}</tbody></table></div>
+      </div>`+(active.length?salesCards(active):'');
+    } else {
+      const yy=mgrYear.slice(2);
+      let tA=0,tE=0,cov=0,rowsH='';
+      active.forEach(st=>{
+        const rec=pastRec(mgrYear,st);
+        if(rec){
+          cov++;
+          const tot=rec.act.reduce((x,v)=>x+(v||0),0), totE=rec.exp.reduce((x,v)=>x+(v||0),0);
+          tA+=tot; tE+=totE;
+          rowsH+=`<tr><td class="l">${st}</td>${rec.act.map(v=>`<td>${v==null?'-':fmt(v)}</td>`).join('')}<td><b>${fmt(tot)}</b></td><td>${fmt(totE)}</td></tr>`;
+        } else {
+          rowsH+=`<tr><td class="l">${st}</td>${Array.from({length:12},()=>'<td>-</td>').join('')}<td class="cell-sub">데이터 없음</td><td>-</td></tr>`;
+        }
+      });
+      sections+=`<div class="card" style="border-left:4px solid var(--blue)">
+        <h2>${o.mgr} 지역장 — ${yy}년 실적</h2>
+        <div class="desc">현재 담당 매장(${active.length}개) 기준으로 ${yy}년 실적을 재구성 · 과거 데이터 보유 ${cov}개 매장 · 당시 담당 지역장과 다를 수 있습니다</div>
+        <div class="chipbox" style="margin-bottom:12px">${stchips}</div>
+        <div class="scroll"><table>
+          <thead><tr><th>지역장</th><th>매장수</th><th>${yy}년 누계 실적</th><th>${yy}년 누계 체험</th></tr></thead>
+          <tbody><tr><td class="l"><b>${o.mgr}</b></td><td>${active.length}</td><td><b>${fmt(tA)}</b></td><td>${fmt(tE)}</td></tr></tbody>
+        </table></div>
+        <div class="section-gap"></div>
+        <div class="scroll"><table>
+          <thead><tr><th style="min-width:150px">매장</th>${Array.from({length:12},(_,i)=>`<th>${i+1}월</th>`).join('')}<th>누계 실적</th><th>누계 체험</th></tr></thead>
+          <tbody>${rowsH}</tbody>
+        </table></div>
+      </div>`;
+    }
   });
-  if(!sections) sections=`<div class="card" style="color:var(--sub)">위에서 지역장을 체크하면 해당 지역장의 요약과 매장별 상세가 아래에 표시됩니다. 여러 명을 동시에 선택할 수 있습니다.</div>`;
+  if(!sections) sections=`<div class="card" style="color:var(--sub)">위에서 지역장을 체크하면 해당 지역장의 요약과 매장별 상세가 아래에 표시됩니다. 연도를 바꾸면 현재 매장 구성 기준으로 24·25년 실적을 볼 수 있습니다.</div>`;
   document.getElementById('tab-mgr').innerHTML=`
-  <div class="card"><h2>지역장 선택</h2><div class="desc">2026년 1~7월 기준 · 체크한 지역장만 아래에 표시됩니다</div>
+  <div class="card"><h2>지역장 선택</h2><div class="desc">체크한 지역장만 아래에 표시됩니다 · 연도 선택 시 현재 매장 구성 기준으로 과거 실적 조회</div>
+    <div class="filters" style="margin-bottom:12px">${yearSel}</div>
     <div class="chipbox">${chips}</div>
   </div>`+sections;
+  document.getElementById('mgrYear').addEventListener('change',e=>{mgrYear=e.target.value;renderMgr();});
   document.querySelectorAll('#tab-mgr .chip input').forEach(cb=>cb.addEventListener('change',()=>{
     if(cb.checked) mgrChecked.add(cb.dataset.mgr); else mgrChecked.delete(cb.dataset.mgr);
     renderMgr();
