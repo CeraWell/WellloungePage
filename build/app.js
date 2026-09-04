@@ -498,42 +498,41 @@ const TDY=(function(){const el=document.getElementById('TODAY');
 function todayBlock(L){
  if(!TDY||!TDY.rows||!TDY.rows.length) return '';
  const codes=new Set(L.map(d=>d.매장코드));
- const teams=new Set(L.map(d=>d.팀)), mgrs=new Set(L.map(d=>d.지역장));
- // 필터: 등록 매장은 매장코드로, 미등록 매장은 팀·지역장으로 맞춘다
  const rows=TDY.rows.filter(r=>codes.has(r.매장코드));
  if(!rows.length) return '';
- const act=rows.reduce((s,r)=>s+(r.실적||0),0);
- const goal=rows.reduce((s,r)=>s+(r.목표||0),0);
+ const S_=k=>rows.reduce((s,r)=>s+(r[k]||0),0);
+ const today=S_('당일'), act=S_('실적'), goal=S_('목표');
+ const pS=S_('전월동기'), lS=S_('전년동기');
  const rate=goal?act/goal*100:null;
- const zero=rows.filter(r=>!r.실적).length;
+ const vsP=pS?((act/pS-1)*100):null, vsL=lS?((act/lS-1)*100):null;
+ const zero=rows.filter(r=>!r.실적).length, todayZero=rows.filter(r=>!r.당일).length;
  const g=[0,1,2].map(i=>rows.reduce((s,r)=>s+((r.grp&&r.grp[i])||0),0));
  const gl=TDY.groups.map(x=>x.k);
- const top=rows.filter(r=>r.실적).sort((a,b)=>b.실적-a.실적).slice(0,5);
+ const topT=rows.filter(r=>r.당일).sort((a,b)=>b.당일-a.당일).slice(0,5);
  const cls=rate==null?'':(rate<8?'low':rate<15?'mid':'');
  const w=Math.min(100,rate||0);
+ const dow=TDY.asOf?['일','월','화','수','목','금','토'][new Date(TDY.asOf+'T00:00:00').getDay()]:'';
  return '<div class="today">'
-  +'<div class="t-head"><h3>당일 실적 현황 <span style="font-weight:400;color:var(--ink-3)">— '+TDY.month+' 목표 대비</span></h3>'
-  +'<span class="t-when">「당일실적(당월)」 탭 · '+rows.length+'개 매장</span></div>'
+  +'<div class="t-head"><h3>당일 실적 현황</h3>'
+  +'<span class="t-when">'+(TDY.asOf?TDY.asOf+' ('+dow+') 기준':'기준일 미표기')+' · '+TDY.month+' 진행 · '+rows.length+'개 매장</span></div>'
   +'<div class="t-grid">'
-  +'<div class="t-cell"><div class="tl">누계 실적</div><div class="tv">'+nf(act)+'<small style="font-size:13px;color:var(--ink-3)">대</small></div>'
-  +'<div class="td2">실적 없는 매장 '+zero+'개</div></div>'
-  +'<div class="t-cell"><div class="tl">월 목표</div><div class="tv">'+nf(goal)+'<small style="font-size:13px;color:var(--ink-3)">대</small></div>'
-  +'<div class="td2">매장당 평균 '+(rows.length?nf(goal/rows.length,1):'—')+'대</div></div>'
-  +'<div class="t-cell"><div class="tl">달성률</div><div class="tv" style="color:'+(rate<8?'var(--crit)':rate<15?'var(--warn)':'var(--ok)')+'">'+nf(rate,1)+'<small style="font-size:13px;color:var(--ink-3)">%</small></div>'
-  +'<div class="td2">남은 물량 '+nf(Math.max(0,goal-act))+'대</div></div>'
-  +'<div class="t-cell"><div class="tl">선두</div><div class="tv" style="font-size:17px;font-family:inherit">'+(top[0]?top[0].매장명:'—')+'</div>'
-  +'<div class="td2">'+(top[0]?top[0].실적+'대 · 달성률 '+nf(top[0].목표?top[0].실적/top[0].목표*100:null,0)+'%':'')+'</div></div>'
+  +'<div class="t-cell"><div class="tl">당일 실적</div><div class="tv">'+nf(today)+'<small style="font-size:13px;color:var(--ink-3)">대</small></div>'
+  +'<div class="td2">'+(rows.length-todayZero)+'개 매장에서 발생</div></div>'
+  +'<div class="t-cell"><div class="tl">'+TDY.month+' 누계</div><div class="tv">'+nf(act)+'<small style="font-size:13px;color:var(--ink-3)">대</small></div>'
+  +'<div class="td2">목표 '+nf(goal)+'대 · 달성률 '+nf(rate,1)+'%</div></div>'
+  +'<div class="t-cell"><div class="tl">전년 동기 대비</div><div class="tv" style="color:'+pcol(vsL)+'">'+(vsL==null?'—':pct(vsL))+'</div>'
+  +'<div class="td2">'+TDY.ly+' 같은 날짜까지 '+nf(lS)+'대</div></div>'
+  +'<div class="t-cell"><div class="tl">전월 동기 대비</div><div class="tv" style="color:'+pcol(vsP)+'">'+(vsP==null?'—':pct(vsP))+'</div>'
+  +'<div class="td2">'+TDY.prev+' 같은 날짜까지 '+nf(pS)+'대</div></div>'
   +'</div>'
   +'<div class="pbar"><i class="'+cls+'" style="width:'+w+'%"></i></div>'
   +'<div class="t-split">'
   + g.map((v,i)=>'<div class="t-seg"><div class="sl">'+gl[i]+'</div><div class="sv">'+nf(v)+'대</div>'
       +'<div class="sp">'+(act?nf(v/act*100,0):'0')+'%</div></div>').join('')
-  +'<div class="t-seg"><div class="sl">실적 상위</div><div class="sv" style="font-size:12.5px;font-family:inherit;font-weight:500;line-height:1.5">'
-  + (top.map(r=>r.매장명+' '+r.실적).join('<br>')||'—')+'</div></div>'
+  +'<div class="t-seg"><div class="sl">당일 상위</div><div class="sv" style="font-size:12.5px;font-family:inherit;font-weight:500;line-height:1.5">'
+  + (topT.map(r=>r.매장명+' '+r.당일).join('<br>')||'당일 실적 없음')+'</div></div>'
   +'</div>'
-  +'<div class="t-warn"><b>진행월 실적은 이 블록과 「당일·누적」 탭에서만 봅니다.</b> 일별매출 탭은 월이 끝난 뒤 한 번에 올라오므로, 아래 모든 지표는 '+(TDY.prev)+'까지의 완결된 달만 담고 있습니다.'
-  + (TDY.asOf ? ' 기준일 '+TDY.asOf+'.' : ' 탭에 기준일자가 없어 이 숫자가 며칠까지인지는 표시하지 못합니다.')
-  +'</div></div>';
+  +'<div class="t-warn"><b>진행월 실적은 이 블록과 「당일·누적」 탭에서만 봅니다.</b> 일별매출 탭은 월이 끝난 뒤 한 번에 올라오므로, 아래 모든 지표는 '+TDY.prev+'까지의 완결된 달만 담고 있습니다. 동기 비교는 같은 날짜(1~'+TDY.day+'일)까지로 맞췄습니다.</div></div>';
 }
 
 /* ===== 데일리 탭 ===== */
@@ -546,62 +545,65 @@ function viewDay(L){
  const codes=new Set(L.map(d=>d.매장코드));
  const R=TDY.rows.filter(r=>codes.has(r.매장코드));
  if(!R.length) return '<div class="card"><div class="empty">선택한 조건에 해당하는 매장이 없습니다.</div></div>';
- const S_=(k)=>R.reduce((s,r)=>s+(r[k]||0),0);
- const act=S_('실적'), goal=S_('목표'), prev=S_('전월'), ly=S_('전년');
+ const S_=k=>R.reduce((s,r)=>s+(r[k]||0),0);
+ const today=S_('당일'), act=S_('실적'), goal=S_('목표');
+ const pS=S_('전월동기'), lS=S_('전년동기'), pF=S_('전월전체'), lF=S_('전년전체');
  const rate=goal?act/goal*100:null;
- const vsP=prev?((act/prev-1)*100):null, vsL=ly?((act/ly-1)*100):null;
+ const vsP=pS?((act/pS-1)*100):null, vsL=lS?((act/lS-1)*100):null;
  const zero=R.filter(r=>!r.실적).length;
  const g=[0,1,2].map(i=>R.reduce((s,r)=>s+((r.grp&&r.grp[i])||0),0));
  const gl=TDY.groups.map(x=>x.k);
- const w=Math.min(100,rate||0);
- const cls=rate<8?'low':rate<15?'mid':'';
- // 모델별 합계
+ const w=Math.min(100,rate||0), cls=rate<8?'low':rate<15?'mid':'';
  const mtot={}; R.forEach(r=>{for(const k in (r.models||{})) mtot[k]=(mtot[k]||0)+r.models[k];});
  const mrank=Object.entries(mtot).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({k,v}));
- // 목표 대비 진행 상하위
- const withGoal=R.filter(r=>r.목표);
- const topR=withGoal.slice().sort((a,b)=>(b.실적/b.목표)-(a.실적/a.목표)).slice(0,10)
-   .map(r=>({k:r.매장명,v:Math.round(r.실적/r.목표*1000)/10}));
- const asOf=TDY.asOf;
- return '<p class="note'+(asOf?'':' hot')+'" style="margin-top:0;margin-bottom:16px">'
-  +'<b>진행월('+TDY.month+')은 「당일실적(당월)」 탭이 유일한 실적 소스입니다.</b> '
-  +'일별매출 탭은 월이 끝난 뒤 한 번에 올라오므로 당월 숫자는 여기서만 봅니다. '
-  +(asOf?('기준일 <b>'+asOf+'</b>.'):'<b>탭에 기준일자가 없어 이 숫자가 며칠까지인지 표시하지 못합니다.</b>')
-  +' 비교 대상인 전월·전년 실적은 일별매출(완결된 달) 기준이라 <b>당월은 월 중간, 비교월은 한 달 전체</b>입니다 — 진행률로 보셔야 합니다.</p>'
+ const topT=R.filter(r=>r.당일).sort((a,b)=>b.당일-a.당일).slice(0,10).map(r=>({k:r.매장명,v:r.당일}));
+ const yoyR=R.filter(r=>r.전년동기).sort((a,b)=>(a.실적/a.전년동기)-(b.실적/b.전년동기)).slice(0,10)
+   .map(r=>({k:r.매장명,v:Math.round((r.실적/r.전년동기-1)*1000)/10}));
+ const D_=TDY.day;
+ return '<p class="note" style="margin-top:0;margin-bottom:16px">'
+  +'<b>진행월('+TDY.month+')은 「당일실적(당월)」 탭이 유일한 실적 소스입니다.</b> 일별매출 탭은 월이 끝난 뒤 한 번에 올라옵니다. '
+  +(TDY.asOf?('기준일 <b>'+TDY.asOf+'</b> — 동기 비교는 전월·전년의 <b>1~'+D_+'일 누계</b>와 맞췄습니다.')
+           :'탭에 기준일자가 없어 동기 비교를 하지 못합니다.')
+  +' 다만 동기 비교값은 일별매출 탭에서 오므로 두 소스의 인정 기준 차이만큼 오차가 있습니다.</p>'
  +kpiRow([
+  {l:'당일 실적'+(TDY.asOf?' ('+TDY.asOf.slice(5)+')':''),v:nf(today),u:'대',d:R.filter(r=>r.당일).length+'개 매장에서 발생',c:''},
   {l:TDY.month+' 누계',v:nf(act),u:'대',d:'실적 없는 매장 '+zero+'개 / '+R.length+'개',c:''},
-  {l:'월 목표',v:nf(goal),u:'대',d:'매장당 평균 '+nf(goal/R.length,1)+'대',c:''},
-  {l:'달성률',v:nf(rate,1),u:'%',d:'남은 물량 '+nf(Math.max(0,goal-act))+'대',c:rate<8?'dn':rate<15?'fl':'up'},
-  {l:'전월 실적 ('+TDY.prev+')',v:nf(prev),u:'대',d:'한 달 전체 · 당월은 진행 중',c:''},
-  {l:'전년 동월 ('+TDY.ly+')',v:nf(ly),u:'대',d:'한 달 전체',c:''},
-  {l:'목표 vs 전월 실적',v:prev?pct((goal/prev-1)*100).replace('%',''):'—',u:'%',d:'목표가 전월보다 '+(goal>prev?'높음':'낮음'),c:goal>prev?'up':'dn'}])
- +'<div class="card"><div class="ch"><h3>목표 대비 진행</h3><span class="hint">'+nf(act)+' / '+nf(goal)+'대</span></div>'
+  {l:'달성률',v:nf(rate,1),u:'%',d:'목표 '+nf(goal)+'대 · 남은 '+nf(Math.max(0,goal-act))+'대',c:rate<8?'dn':rate<15?'fl':'up'},
+  {l:'전년 동기 대비',v:vsL==null?'—':pct(vsL).replace('%',''),u:'%',d:TDY.ly+' 1~'+D_+'일 '+nf(lS)+'대',c:vsL==null?'':vsL<0?'dn':'up'},
+  {l:'전월 동기 대비',v:vsP==null?'—':pct(vsP).replace('%',''),u:'%',d:TDY.prev+' 1~'+D_+'일 '+nf(pS)+'대',c:vsP==null?'':vsP<0?'dn':'up'},
+  {l:'월말 예상',v:pS?nf(Math.round(pF*(act/pS))):'—',u:'대',d:'전월 진행률 적용 · 전월 '+nf(pF)+'대',c:(pS&&pF*(act/pS)<goal)?'dn':'up'}])
+ +'<div class="card"><div class="ch"><h3>목표 대비 진행</h3><span class="hint">'+nf(act)+' / '+nf(goal)+'대 · 전년 동기 '+nf(lS)+'대 · 전월 동기 '+nf(pS)+'대</span></div>'
  +'<div class="pbar" style="height:12px"><i class="'+cls+'" style="width:'+w+'%"></i></div>'
  +'<div class="t-split">'
  + g.map((v,i)=>'<div class="t-seg"><div class="sl">'+gl[i]+'</div><div class="sv">'+nf(v)+'대</div>'
      +'<div class="sp">'+(act?nf(v/act*100,0):'0')+'% of 실적</div></div>').join('')
  +'</div></div>'
- +'<div class="two"><div class="card tight"><div class="ch"><h3>모델별 실적</h3><span class="hint">대</span></div>'
+ +'<div class="two"><div class="card tight"><div class="ch"><h3>당일 실적 상위</h3><span class="hint">'+(TDY.asOf||'')+'</span></div>'
+ + rank(topT,v=>nf(v)+'대')+'</div>'
+ +'<div class="card tight"><div class="ch"><h3>전년 동기 대비 하위</h3><span class="hint">% · 누계 기준</span></div>'
+ + rank(yoyR,v=>pct(v),true)+'</div></div>'
+ +'<div class="card tight"><div class="ch"><h3>모델별 실적</h3><span class="hint">'+TDY.month+' 누계 · 대</span></div>'
  + rank(mrank,v=>nf(v)+'대')+'</div>'
- +'<div class="card tight"><div class="ch"><h3>달성률 상위</h3><span class="hint">% · 실적÷목표</span></div>'
- + rank(topR,v=>nf(v,1)+'%')+'</div></div>'
  +'<h2 class="sec">매장별 '+TDY.month+' 진행</h2>'
  +table([{h:'매장',k:'매장명',f:r=>r.매장명+'<span class="gb">'+(r.팀||'')+'</span>',cls:'name'},
    {h:'지역장',k:'지역장',f:r=>r.지역장||'—',cls:'txt'},
+   {h:'당일',k:'당일',f:r=>r.당일?nf(r.당일):'—',style:r=>r.당일?'font-weight:600':'color:var(--ink-3)'},
+   {h:'누계',k:'실적',f:r=>nf(r.실적),style:r=>r.실적?'':'color:var(--crit)'},
    {h:'목표',k:'목표',f:r=>nf(r.목표)},
-   {h:'실적',k:'실적',f:r=>nf(r.실적),style:r=>r.실적?'':'color:var(--crit)'},
    {h:'달성률',k:'_r',f:r=>r.목표?nf(r.실적/r.목표*100,1)+'%':'—',
      style:r=>'font-weight:600;color:'+(!r.목표?'var(--ink-3)':(r.실적/r.목표*100)<4?'var(--crit)':(r.실적/r.목표*100)<8?'var(--warn)':'var(--ok)')},
-   {h:'순위',k:'순위',f:r=>r.순위==null?'—':nf(r.순위)},
+   {h:'전년동기',k:'전년동기',f:r=>nf(r.전년동기)},
+   {h:'전년비',k:'_y',f:r=>r.전년동기?pct((r.실적/r.전년동기-1)*100):'—',style:r=>'color:'+pcol(r.전년동기?(r.실적/r.전년동기-1)*100:null)},
+   {h:'전월동기',k:'전월동기',f:r=>nf(r.전월동기)},
    {h:'V',k:'_v',f:r=>nf(r.grp[0])},
    {h:'M·S',k:'_m',f:r=>nf(r.grp[1])},
    {h:'기타',k:'_e',f:r=>nf(r.grp[2])},
-   {h:TDY.prev,k:'전월',f:r=>nf(r.전월)},
-   {h:TDY.ly,k:'전년',f:r=>nf(r.전년)}],
-  R.map(r=>({...r,_r:r.목표?r.실적/r.목표:null,_v:r.grp[0],_m:r.grp[1],_e:r.grp[2]}))
-   .sort((a,b)=>b.실적-a.실적||((b._r||0)-(a._r||0))),'tDay')
- +'<p class="note"><b>순위</b>는 시트에 들어 있는 값을 그대로 씁니다(실적 기준, 동점은 같은 순위). '
- +'모델은 V 시리즈 / M·S 시리즈 / 기타 세 갈래로 묶었습니다 — 세부 모델은 위 「모델별 실적」에서 보세요.</p>';
+   {h:'순위',k:'순위',f:r=>r.순위==null?'—':nf(r.순위)}],
+  R.map(r=>({...r,_r:r.목표?r.실적/r.목표:null,_y:r.전년동기?r.실적/r.전년동기:null,
+             _v:r.grp[0],_m:r.grp[1],_e:r.grp[2]}))
+   .sort((a,b)=>b.당일-a.당일||b.실적-a.실적),'tDay')
+ +'<p class="note"><b>순위</b>는 시트 값을 그대로 씁니다(실적 기준, 동점은 같은 순위). '
+ +'<b>월말 예상</b>은 전월이 같은 날짜까지 낸 실적 대비 지금 진행률을 전월 전체에 적용한 값입니다 — 월 후반 집중 패턴을 반영합니다.</p>';
 }
 function cumChart(N,upto,series){
  const W2=Math.max(620,N*22),H=230,P={t:16,r:54,b:32,l:48},iw=W2-P.l-P.r,ih=H-P.t-P.b;

@@ -138,26 +138,27 @@ daily = {'maxDay': MAXD, 'cur': CUR, 'prev': PREV, 'ly': LY,
 
 # ---------- 당일실적(당월) : 목표 대비 진행 ----------
 # 당월(진행월)은 일별매출이 아직 안 올라오므로 이 탭이 유일한 실적 소스다.
+# 시트 1행은 「기준일 | 2026-09-03」 메타 행이고, 실제 헤더는 2행에 있다.
 # 매장마스터에 없는 매장(병합매장 등)은 관리 대상이 아니라 제외한다.
 TODAY = None
 if '당일실적(당월)' in x.sheet_names:
-    td = x.parse('당일실적(당월)')
+    _raw = x.parse('당일실적(당월)', header=None)
+    ASOF = None
+    if str(_raw.iat[0, 0]).strip().startswith('기준일'):
+        _d = pd.to_datetime(_raw.iat[0, 1], errors='coerce')
+        if pd.notna(_d):
+            ASOF = _d.strftime('%Y-%m-%d')
+        td = x.parse('당일실적(당월)', header=1)
+    else:
+        td = x.parse('당일실적(당월)')
     td.columns = [str(c).replace('\n', '') for c in td.columns]
-    META = ['매장코드','매장명','지역장','사업팀','운영M','목표','실적','달성률','순위','합계','일자','기준일']
+    META = ['매장코드','매장명','지역장','사업팀','운영M','당일실적','목표','실적','달성률','순위','합계']
     SUB  = [c for c in td.columns if c.startswith('Unnamed')]      # V계열/M계열/기타 소계
     MODELS = [c for c in td.columns if c not in META + SUB]
-    for c in ['목표','실적','달성률','순위','합계'] + MODELS + SUB:
+    for c in ['당일실적','목표','실적','달성률','순위','합계'] + MODELS + SUB:
         if c in td.columns:
             td[c] = pd.to_numeric(td[c], errors='coerce')
     td = td[td['매장코드'].isin(MS)].copy()          # 등록 매장만
-    # 일자 열이 생기면 기준일로 쓴다 (없으면 None)
-    ASOF = None
-    for c in ['일자','기준일']:
-        if c in td.columns:
-            _dt = pd.to_datetime(td[c], errors='coerce')
-            if _dt.notna().any():
-                ASOF = _dt.max().strftime('%Y-%m-%d')
-            break
     V   = [c for c in MODELS if c.startswith('V')]
     MSR = [c for c in MODELS if c.startswith('M') or c.startswith('S')]
     ETC = [c for c in MODELS if c not in V + MSR]
@@ -170,6 +171,7 @@ if '당일실적(당월)' in x.sheet_names:
             '매장코드': code, '매장명': r['매장명'],
             '팀':    base.at[code, '팀']    if code in base.index else r.get('사업팀'),
             '지역장': base.at[code, '지역장'] if code in base.index else r.get('지역장'),
+            '당일': 0 if pd.isna(r.get('당일실적')) else int(r['당일실적']),
             '목표': None if pd.isna(r.get('목표')) else int(r['목표']),
             '실적': 0 if pd.isna(r.get('실적')) else int(r['실적']),
             '순위': None if pd.isna(r.get('순위')) else int(r['순위']),
@@ -177,13 +179,22 @@ if '당일실적(당월)' in x.sheet_names:
             'grp': [int(sum(v for k, v in models.items() if k in V)),
                     int(sum(v for k, v in models.items() if k in MSR)),
                     int(sum(v for k, v in models.items() if k in ETC))]})
-    # 비교 기준: 전월·전년 동월 실적 (일별매출, 완결된 달)
-    prev_by = sa[sa['ym'] == PREV].groupby('매장코드').size().to_dict()
-    ly_by   = sa[sa['ym'] == LY  ].groupby('매장코드').size().to_dict()
+    # 비교 기준 — 기준일이 있으면 같은 날짜까지의 동기 누계로 맞춘다
+    DAY = pd.Timestamp(ASOF).day if ASOF else None
+    def _upto(ym):
+        sel = sa[sa['ym'] == ym]
+        if DAY:
+            sel = sel[sel['주문확정일'].dt.day <= DAY]
+        return sel.groupby('매장코드').size().to_dict()
+    prev_s, ly_s = _upto(PREV), _upto(LY)
+    prev_f = sa[sa['ym'] == PREV].groupby('매장코드').size().to_dict()
+    ly_f   = sa[sa['ym'] == LY  ].groupby('매장코드').size().to_dict()
     for r in out_rows:
-        r['전월'] = int(prev_by.get(r['매장코드'], 0))
-        r['전년'] = int(ly_by.get(r['매장코드'], 0))
-    TODAY = {'rows': out_rows, 'month': CUR, 'prev': PREV, 'ly': LY, 'asOf': ASOF,
+        c = r['매장코드']
+        r['전월동기'] = int(prev_s.get(c, 0)); r['전월전체'] = int(prev_f.get(c, 0))
+        r['전년동기'] = int(ly_s.get(c, 0));   r['전년전체'] = int(ly_f.get(c, 0))
+    TODAY = {'rows': out_rows, 'month': CUR, 'prev': PREV, 'ly': LY,
+             'asOf': ASOF, 'day': DAY,
              'groups': [{'k': 'V 시리즈', 'items': V},
                         {'k': 'M·S 시리즈', 'items': MSR},
                         {'k': '기타', 'items': ETC}],
@@ -216,6 +227,8 @@ print(f'  데일리 진행월 {CUR} · 최종일 {MAXD}')
 if TODAY:
     _t = sum(r['실적'] for r in TODAY['rows']); _g = sum(r['목표'] or 0 for r in TODAY['rows'])
     print(f'  당일실적 {len(TODAY["rows"])}개 매장 · 실적 {_t}대 / 목표 {_g}대'
-          f' ({_t/_g*100:.1f}%) · 기준일 {TODAY["asOf"] or "미표기"}')
+          f' ({_t/_g*100:.1f}%) · 기준일 {TODAY["asOf"] or "미표기"}'
+          f' · 당일 {sum(r["당일"] for r in TODAY["rows"])}대'
+          f' · 전년 동기 {sum(r["전년동기"] for r in TODAY["rows"])}대')
 else:
     print('  당일실적(당월) 탭 없음')
