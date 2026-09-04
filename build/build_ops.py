@@ -135,6 +135,52 @@ daily = {'maxDay': MAXD, 'cur': CUR, 'prev': PREV, 'ly': LY,
          'coDaily': {k: int(v) for k, v in co.items()},
          'dow': [round(float(dowg.get(i, 0)), 1) for i in range(7)]}
 
+
+# ---------- 당일실적(당월) : 목표 대비 진행 ----------
+TODAY = None
+if '당일실적(당월)' in x.sheet_names:
+    td = x.parse('당일실적(당월)')
+    td.columns = [str(c).replace('\n', '') for c in td.columns]
+    META = ['매장코드','매장명','지역장','사업팀','운영M','목표','실적','달성률','순위','합계']
+    SUB  = [c for c in td.columns if c.startswith('Unnamed')]      # V계열/M계열/기타 소계
+    MODELS = [c for c in td.columns if c not in META + SUB]
+    for c in ['목표','실적','달성률','순위','합계'] + MODELS + SUB:
+        if c in td.columns:
+            td[c] = pd.to_numeric(td[c], errors='coerce')
+    td = td[td['매장명'].notna()].copy()
+    # 매장코드가 비었으면 매장명으로 일별매출에서 코드를 찾아 채운다
+    name2code = (sa.dropna(subset=['매장명','매장코드'])
+                   .drop_duplicates('매장명').set_index('매장명')['매장코드'].to_dict())
+    td['매장코드'] = td['매장코드'].fillna(td['매장명'].map(name2code))
+    V  = [c for c in MODELS if c.startswith('V')]
+    MS_= [c for c in MODELS if c.startswith('M') or c.startswith('S')]
+    ETC= [c for c in MODELS if c not in V + MS_]
+    rows = []
+    for r in td.itertuples(index=False):
+        g = r._asdict() if hasattr(r, '_asdict') else {}
+        rows.append(g)
+    tdd = td.to_dict('records')
+    out_rows = []
+    for r in tdd:
+        models = {m: int(r[m]) for m in MODELS if pd.notna(r.get(m)) and r[m]}
+        out_rows.append({
+            '매장코드': r.get('매장코드') if pd.notna(r.get('매장코드')) else None,
+            '매장명': r['매장명'],
+            '팀': r.get('사업팀'), '지역장': r.get('지역장'), '운영M': r.get('운영M'),
+            '목표': None if pd.isna(r.get('목표')) else int(r['목표']),
+            '실적': 0 if pd.isna(r.get('실적')) else int(r['실적']),
+            '순위': None if pd.isna(r.get('순위')) else int(r['순위']),
+            '등록': bool(pd.notna(r.get('매장코드')) and r.get('매장코드') in MS),
+            'models': models,
+            'grp': [int(sum(v for k, v in models.items() if k in V)),
+                    int(sum(v for k, v in models.items() if k in MS_)),
+                    int(sum(v for k, v in models.items() if k in ETC))]})
+    TODAY = {'rows': out_rows, 'month': CUR,
+             'groups': [{'k': 'V 시리즈', 'items': V},
+                        {'k': 'M·S 시리즈', 'items': MS_},
+                        {'k': '기타', 'items': ETC}],
+             'models': MODELS}
+
 # ---------- 조립 ----------
 head = open(os.path.join(BUILD, 'head.html'), encoding='utf-8').read()
 app  = open(os.path.join(BUILD, 'app.js'),   encoding='utf-8').read()
@@ -143,6 +189,8 @@ body = (head
         + json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(',', ':')) + '</script>\n'
         + '<script id="DAILY" type="application/json">'
         + json.dumps(daily,   ensure_ascii=False, allow_nan=False, separators=(',', ':')) + '</script>\n'
+        + '<script id="TODAY" type="application/json">'
+        + json.dumps(clean(TODAY) if TODAY else None, ensure_ascii=False, allow_nan=False, separators=(',', ':')) + '</script>\n'
         + '<script>\n' + app + '\n</script>\n')
 i = body.index('<style>')
 html = ('<!doctype html>\n<html lang="ko">\n<head>\n<meta charset="utf-8">\n'
@@ -157,3 +205,9 @@ open(out, 'w', encoding='utf-8').write(html)
 print(f'생성 완료: {out}')
 print(f'  매장 {len(stores)}개 · 계약수량 {months["sal"][0]}~{MAXYM} · 모객 {",".join(VIS_YM) or "없음"}')
 print(f'  데일리 진행월 {CUR} · 최종일 {MAXD}')
+if TODAY:
+    _t = sum(r['실적'] for r in TODAY['rows']); _g = sum(r['목표'] or 0 for r in TODAY['rows'])
+    _un = sum(1 for r in TODAY['rows'] if not r['등록'])
+    print(f'  당일실적 탭 {len(TODAY["rows"])}행 · 실적 {_t}대 / 목표 {_g}대 · 마스터 미등록 {_un}개')
+else:
+    print('  당일실적(당월) 탭 없음')

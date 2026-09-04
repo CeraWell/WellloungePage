@@ -317,7 +317,8 @@ function viewAll(A){
   return '<div class="dcard" style="--stripe:'+a.v+'"><h4>'+a.k+'<span>'+l.length+'</span></h4><div class="q">'+a.q+'</div>'
    +'<p>'+a.p+'</p><div class="who">등급별 '+byG+'<br><b>'+(w||'—')+'</b></div></div>';}).join('');
  const ok=L.filter(d=>!d.진단.length).length;
- return kpiRow([
+ return todayBlock(L)
+ +kpiRow([
   {l:'월 '+MLAB()+' ('+A.ms.length+'개월 평균)',v:BV(A.salM),u:BU(),d:'기간 합계 '+BV(A.salSum)+(isQ()?'대':'억'),c:''},
   {l:'기간 전년 동기비',v:A.wYoy==null?'—':pct(A.wYoy).replace('%',''),u:'%',d:A.wYoy==null?'전년 데이터 없음':'선택 기간 대 전년 동기',c:A.wYoy==null?'':A.wYoy<0?'dn':A.wYoy<10?'fl':'up'},
   {l:'일평균 방문',v:A.hasVis?nf(A.visLast):'—',u:'건',d:A.hasVis?('워크인 '+nf(A.wiLast)+' + 클래스 '+nf(A.clLast)):'기간 내 모객 데이터 없음',c:''},
@@ -488,6 +489,53 @@ function viewVis(A){
    {h:'진단',k:'조합',f:TAGS,sort:false}],
   L.slice().sort((a,b)=>(b.총방문일평균||0)-(a.총방문일평균||0)),'tVis')
  +'<p class="note"><b>클래스 비중이 90%를 넘는 대형점 10곳</b>(서울은평뉴타운·의정부금오·화성동탄호수공원 등)은 워크인이 일 2~7건뿐입니다. 과소입력이 아니라 클래스 중심 운영이라, 워크인만으로 전환율을 내면 40~79%로 튀어 비교가 불가능해집니다. 그래서 전환율 분모를 총방문으로 잡았습니다.</p>';
+}
+
+
+/* ===== 당일 실적 현황 (당월 목표 대비) ===== */
+const TDY=(function(){const el=document.getElementById('TODAY');
+  if(!el)return null; try{return JSON.parse(el.textContent);}catch(e){return null;}})();
+function todayBlock(L){
+ if(!TDY||!TDY.rows||!TDY.rows.length) return '';
+ const codes=new Set(L.map(d=>d.매장코드));
+ const teams=new Set(L.map(d=>d.팀)), mgrs=new Set(L.map(d=>d.지역장));
+ // 필터: 등록 매장은 매장코드로, 미등록 매장은 팀·지역장으로 맞춘다
+ const rows=TDY.rows.filter(r=> r.등록 ? codes.has(r.매장코드)
+    : ((F.team==='전체'||r.팀===F.team) && (F.mgr==='전체'||r.지역장===F.mgr) && F.grade==='전체'));
+ if(!rows.length) return '';
+ const act=rows.reduce((s,r)=>s+(r.실적||0),0);
+ const goal=rows.reduce((s,r)=>s+(r.목표||0),0);
+ const rate=goal?act/goal*100:null;
+ const zero=rows.filter(r=>!r.실적).length;
+ const unreg=rows.filter(r=>!r.등록).length;
+ const g=[0,1,2].map(i=>rows.reduce((s,r)=>s+((r.grp&&r.grp[i])||0),0));
+ const gl=TDY.groups.map(x=>x.k);
+ const top=rows.filter(r=>r.실적).sort((a,b)=>b.실적-a.실적).slice(0,5);
+ const cls=rate==null?'':(rate<8?'low':rate<15?'mid':'');
+ const w=Math.min(100,rate||0);
+ return '<div class="today">'
+  +'<div class="t-head"><h3>당일 실적 현황 <span style="font-weight:400;color:var(--ink-3)">— '+TDY.month+' 목표 대비</span></h3>'
+  +'<span class="t-when">「당일실적(당월)」 탭 · '+rows.length+'개 매장</span></div>'
+  +'<div class="t-grid">'
+  +'<div class="t-cell"><div class="tl">누계 실적</div><div class="tv">'+nf(act)+'<small style="font-size:13px;color:var(--ink-3)">대</small></div>'
+  +'<div class="td2">실적 없는 매장 '+zero+'개</div></div>'
+  +'<div class="t-cell"><div class="tl">월 목표</div><div class="tv">'+nf(goal)+'<small style="font-size:13px;color:var(--ink-3)">대</small></div>'
+  +'<div class="td2">매장당 평균 '+(rows.length?nf(goal/rows.length,1):'—')+'대</div></div>'
+  +'<div class="t-cell"><div class="tl">달성률</div><div class="tv" style="color:'+(rate<8?'var(--crit)':rate<15?'var(--warn)':'var(--ok)')+'">'+nf(rate,1)+'<small style="font-size:13px;color:var(--ink-3)">%</small></div>'
+  +'<div class="td2">남은 물량 '+nf(Math.max(0,goal-act))+'대</div></div>'
+  +'<div class="t-cell"><div class="tl">선두</div><div class="tv" style="font-size:17px;font-family:inherit">'+(top[0]?top[0].매장명:'—')+'</div>'
+  +'<div class="td2">'+(top[0]?top[0].실적+'대 · 달성률 '+nf(top[0].목표?top[0].실적/top[0].목표*100:null,0)+'%':'')+'</div></div>'
+  +'</div>'
+  +'<div class="pbar"><i class="'+cls+'" style="width:'+w+'%"></i></div>'
+  +'<div class="t-split">'
+  + g.map((v,i)=>'<div class="t-seg"><div class="sl">'+gl[i]+'</div><div class="sv">'+nf(v)+'대</div>'
+      +'<div class="sp">'+(act?nf(v/act*100,0):'0')+'%</div></div>').join('')
+  +'<div class="t-seg"><div class="sl">실적 상위</div><div class="sv" style="font-size:12.5px;font-family:inherit;font-weight:500;line-height:1.5">'
+  + (top.map(r=>r.매장명+' '+r.실적).join('<br>')||'—')+'</div></div>'
+  +'</div>'
+  +'<div class="t-warn">이 블록만 「당일실적(당월)」 탭에서 옵니다. 아래 모든 지표의 출처인 일별매출 탭과 <b>집계 시점이 달라</b> 숫자가 어긋납니다 — 9월 누계가 여기서는 '+nf(act)+'대, 일별매출 기준으로는 '+nf(DLY?Object.values(DLY.storeDaily||{}).reduce((s,o)=>s+Object.keys(o).filter(k=>k.slice(0,7)===TDY.month).reduce((a,k)=>a+o[k],0),0):0)+'대입니다.'
+  + (unreg?' 또 <b>'+unreg+'개 매장</b>이 매장마스터에 없어 다른 탭에는 나오지 않습니다.':'')
+  +'</div></div>';
 }
 
 /* ===== 데일리 탭 ===== */
