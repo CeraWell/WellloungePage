@@ -200,6 +200,27 @@ if '당일실적(당월)' in x.sheet_names:
                         {'k': '기타', 'items': ETC}],
              'models': MODELS}
 
+    # 연간(YTD) : 완결된 달은 일별매출, 진행월은 당일실적 탭
+    YR = CUR[:4]
+    ytd_prev_m = {}   # 전년 같은 달
+    _ytd, _lytd = 0, 0
+    _months = []
+    for m in sorted(set(sa['ym'])):
+        if not m.startswith(YR) or m >= CUR:
+            continue
+        n = int((sa['ym'] == m).sum())
+        _ytd += n; _months.append({'ym': m, 'v': n, 'src': '일별매출'})
+        pm = (pd.Period(m) - 12).strftime('%Y-%m')
+        _lytd += int((sa['ym'] == pm).sum())
+    _curN = sum(r['실적'] for r in out_rows)
+    _ytd += _curN
+    _months.append({'ym': CUR, 'v': _curN, 'src': '당일실적', 'partial': True})
+    _lytd += sum(r['전년동기'] for r in out_rows)
+    TODAY['ytd'] = {'year': YR, 'total': _ytd, 'ly': _lytd,
+                    'yoy': round((_ytd / _lytd - 1) * 100, 1) if _lytd else None,
+                    'months': _months, 'curN': _curN}
+
+
 # ---------- 조립 ----------
 head = open(os.path.join(BUILD, 'head.html'), encoding='utf-8').read()
 app  = open(os.path.join(BUILD, 'app.js'),   encoding='utf-8').read()
@@ -230,5 +251,7 @@ if TODAY:
           f' ({_t/_g*100:.1f}%) · 기준일 {TODAY["asOf"] or "미표기"}'
           f' · 당일 {sum(r["당일"] for r in TODAY["rows"])}대'
           f' · 전년 동기 {sum(r["전년동기"] for r in TODAY["rows"])}대')
+    _y = TODAY['ytd']
+    print(f'  {_y["year"]}년 누계 {_y["total"]}대 (전년 동기 {_y["ly"]}대 · {_y["yoy"]:+.1f}%)')
 else:
     print('  당일실적(당월) 탭 없음')

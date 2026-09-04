@@ -277,6 +277,7 @@ function groupRows(L,key){const m={};L.forEach(d=>{const k=d[key]||'—';(m[k]=m
 
 /* ===== 테이블 ===== */
 let SORT={col:null,dir:-1};
+let DSORT='실적';
 function table(cols,rows,id){
  const th=cols.map((c,i)=>'<th class="'+(c.sort===false?'':'s')+'" data-i="'+i+'" data-on="'+(SORT.col===i?1:0)+'">'
    +c.h+(SORT.col===i?(SORT.dir<0?' ▾':' ▴'):'')+'</th>').join('');
@@ -290,7 +291,10 @@ function table(cols,rows,id){
  return '<div class="tw" id="'+id+'"><table><thead><tr>'+th+'</tr></thead><tbody>'
   +(body||'<tr><td colspan="'+cols.length+'" class="txt" style="text-align:center;color:var(--ink-3);padding:26px">해당 조건의 매장이 없습니다</td></tr>')+'</tbody></table></div>';
 }
-document.addEventListener('click',e=>{const th=e.target.closest('th.s'); if(!th) return;
+document.addEventListener('click',e=>{
+ const sc=e.target.closest('.schip');
+ if(sc){DSORT=sc.dataset.ds; SORT={col:null,dir:-1}; render(); return;}
+ const th=e.target.closest('th.s'); if(!th) return;
  const i=+th.dataset.i; SORT = SORT.col===i?{col:i,dir:-SORT.dir}:{col:i,dir:-1}; render();});
 
 const NAME=r=>r.매장명+'<span class="gb">'+r.등급+'·'+r.팀+'</span>';
@@ -317,7 +321,8 @@ function viewAll(A){
   return '<div class="dcard" style="--stripe:'+a.v+'"><h4>'+a.k+'<span>'+l.length+'</span></h4><div class="q">'+a.q+'</div>'
    +'<p>'+a.p+'</p><div class="who">등급별 '+byG+'<br><b>'+(w||'—')+'</b></div></div>';}).join('');
  const ok=L.filter(d=>!d.진단.length).length;
- return todayBlock(L)
+ return yearBlock(L)
+ +todayBlock(L)
  +kpiRow([
   {l:'월 '+MLAB()+' ('+A.ms.length+'개월 평균)',v:BV(A.salM),u:BU(),d:'기간 합계 '+BV(A.salSum)+(isQ()?'대':'억'),c:''},
   {l:'기간 전년 동기비',v:A.wYoy==null?'—':pct(A.wYoy).replace('%',''),u:'%',d:A.wYoy==null?'전년 데이터 없음':'선택 기간 대 전년 동기',c:A.wYoy==null?'':A.wYoy<0?'dn':A.wYoy<10?'fl':'up'},
@@ -495,6 +500,36 @@ function viewVis(A){
 /* ===== 당일 실적 현황 (당월 목표 대비) ===== */
 const TDY=(function(){const el=document.getElementById('TODAY');
   if(!el)return null; try{return JSON.parse(el.textContent);}catch(e){return null;}})();
+
+function yearBlock(L){
+ if(!TDY||!TDY.ytd) return '';
+ const Y=TDY.ytd;
+ const scoped=(F.team!=='전체'||F.mgr!=='전체'||F.grade!=='전체');
+ // 필터가 걸리면 전사 연간은 의미가 흐려지므로 안내만 남긴다
+ const mx=Math.max(...Y.months.map(m=>m.v),1);
+ const bars=Y.months.map(m=>'<div class="y-b" title="'+m.ym+' '+nf(m.v)+'대'+(m.partial?' (진행 중)':'')+'">'
+   +'<span class="bv">'+nf(m.v)+'</span>'
+   +'<span class="bb'+(m.partial?' part':'')+'" style="height:'+Math.max(3,(m.v/mx)*54)+'px"></span>'
+   +'<span class="bl">'+m.ym.slice(5)+'</span></div>').join('');
+ const avg=Y.months.length>1?Y.total/(Y.months.length-1):null;   // 진행월 제외 월평균
+ return '<div class="year">'
+  +'<div class="y-head"><h3>'+Y.year+'년 누계 <span style="font-weight:400;color:var(--ink-3)">— 완결된 달 + 진행월 합산</span></h3>'
+  +'<span class="yn">'+(scoped?'전사 기준 (필터 미적용)':'전사 102개 매장')+'</span></div>'
+  +'<div class="y-top">'
+  +'<div class="y-c"><div class="yl">'+Y.year+' 누계</div><div class="yv">'+nf(Y.total)+'<small style="font-size:15px;color:var(--ink-3)">대</small></div>'
+  +'<div class="yd">'+Y.months.length+'개월 · 진행월 '+nf(Y.curN)+'대 포함</div></div>'
+  +'<div class="y-c"><div class="yl">전년 동기</div><div class="yv" style="font-size:26px;color:var(--ink-2)">'+nf(Y.ly)+'<small style="font-size:14px;color:var(--ink-3)">대</small></div>'
+  +'<div class="yd">같은 기간 기준</div></div>'
+  +'<div class="y-c"><div class="yl">전년 동기 대비</div><div class="yv" style="color:'+pcol(Y.yoy)+'">'+(Y.yoy==null?'—':pct(Y.yoy))+'</div>'
+  +'<div class="yd">'+(Y.yoy>=0?'+':'')+nf(Y.total-Y.ly)+'대</div></div>'
+  +'<div class="y-c"><div class="yl">월평균 (완결월)</div><div class="yv" style="font-size:26px">'+nf((Y.total-Y.curN)/Math.max(1,Y.months.length-1))+'<small style="font-size:14px;color:var(--ink-3)">대</small></div>'
+  +'<div class="yd">진행월 제외</div></div>'
+  +'</div>'
+  +'<div class="y-bars">'+bars+'</div>'
+  +'<p class="cap" style="margin-top:12px">노란 막대가 진행월입니다. 완결된 달은 일별매출 탭, 진행월은 「당일실적(당월)」 탭에서 옵니다 — 소스가 달라 진행월 값에는 두 기준의 차이가 섞입니다.</p>'
+  +'</div>';
+}
+
 function todayBlock(L){
  if(!TDY||!TDY.rows||!TDY.rows.length) return '';
  const codes=new Set(L.map(d=>d.매장코드));
@@ -585,6 +620,10 @@ function viewDay(L){
  +'<div class="card tight"><div class="ch"><h3>모델별 실적</h3><span class="hint">'+TDY.month+' 누계 · 대</span></div>'
  + rank(mrank,v=>nf(v)+'대')+'</div>'
  +'<h2 class="sec">매장별 '+TDY.month+' 진행</h2>'
+ +'<div class="sortbar"><span class="sl2">정렬</span>'
+ + ['실적','당일','달성률','전년비','목표'].map(k=>'<button class="schip" data-ds="'+k+'" aria-pressed="'+(DSORT===k)+'">'
+     +(k==='실적'?'당월 누적':k==='당일'?'당일 실적':k)+'</button>').join('')
+ + '<span class="sl2" style="margin-left:auto">표 머리글을 눌러도 정렬됩니다</span></div>'
  +table([{h:'매장',k:'매장명',f:r=>r.매장명+'<span class="gb">'+(r.팀||'')+'</span>',cls:'name'},
    {h:'지역장',k:'지역장',f:r=>r.지역장||'—',cls:'txt'},
    {h:'당일',k:'당일',f:r=>r.당일?nf(r.당일):'—',style:r=>r.당일?'font-weight:600':'color:var(--ink-3)'},
@@ -599,9 +638,12 @@ function viewDay(L){
    {h:'M·S',k:'_m',f:r=>nf(r.grp[1])},
    {h:'기타',k:'_e',f:r=>nf(r.grp[2])},
    {h:'순위',k:'순위',f:r=>r.순위==null?'—':nf(r.순위)}],
-  R.map(r=>({...r,_r:r.목표?r.실적/r.목표:null,_y:r.전년동기?r.실적/r.전년동기:null,
-             _v:r.grp[0],_m:r.grp[1],_e:r.grp[2]}))
-   .sort((a,b)=>b.당일-a.당일||b.실적-a.실적),'tDay')
+  (function(){const rows=R.map(r=>({...r,_r:r.목표?r.실적/r.목표:null,_y:r.전년동기?r.실적/r.전년동기:null,
+             _v:r.grp[0],_m:r.grp[1],_e:r.grp[2]}));
+   const K=DSORT;
+   const key=r=>K==='실적'?r.실적 : K==='당일'?r.당일 : K==='달성률'?(r._r??-1)
+            : K==='전년비'?(r._y??-1) : K==='목표'?(r.목표??-1) : r.실적;
+   return rows.sort((a,b)=>key(b)-key(a) || b.실적-a.실적);})(),'tDay')
  +'<p class="note"><b>순위</b>는 시트 값을 그대로 씁니다(실적 기준, 동점은 같은 순위). '
  +'<b>월말 예상</b>은 전월이 같은 날짜까지 낸 실적 대비 지금 진행률을 전월 전체에 적용한 값입니다 — 월 후반 집중 패턴을 반영합니다.</p>';
 }
